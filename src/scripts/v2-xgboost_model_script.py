@@ -41,13 +41,18 @@ def get_parameters():
     return args.train_dir, args.test_dir, args.model_out_dir, args.model_data_out_dir, args.target_var, args.features, args.num_boost_round, hyper_params
     
 if __name__ == "__main__":
+    # -------------------------
+    # GET PARAMETERS
+    # -------------------------
     train_dir, test_dir, model_out_dir, model_data_out_dir, target_var, features, num_boost_round, hyper_params  = get_parameters()
 
     if features is not None:
         features = features.split('|')
     print(features)
-    
-        # READ TRAIN DATA
+
+    # -------------------------
+    # READ TRAIN DATA
+    # -------------------------
     #train = read_csv_data(train_dir)
     train = pd.read_parquet(train_dir)#.sample(frac=.8)
     print("Train Data After Reading: ", train.shape)
@@ -61,7 +66,9 @@ if __name__ == "__main__":
             train[col] = train[col].astype('category')
             print('Total distinct values for ', col, ' : ',train[col].nunique())
             
+    # -------------------------
     # READ TEST DATA
+    # -------------------------
     #test = read_csv_data(test_dir)
     test = pd.read_parquet(test_dir)
     print("Test Data After Reading: ", test.shape)
@@ -71,8 +78,8 @@ if __name__ == "__main__":
         if col not in numeric_features:
             test[col] = test[col].astype('category')
             print('Total distinct values for ', col, ' : ',test[col].nunique())
+
     # *** DROPPPING ONE HOT ENCODED VECTOR AS DIFFICULT TO HANDLE WIDE DATA ***
-    
     # CONVERT ONE-HOT-ENCODED VECTOR COLUMN 'FEATURES' AND OTHER NUMERIC FEATURES TO SCIPY CSR MATRIX
     # IF NO ONE-HOT-ENCODED THEN JUST USE DENSE MATRIX FOR NUMERIC FEATURES
     #if 'features' in features: # if one hot encode feature vectors is saved under column "features"
@@ -87,7 +94,9 @@ if __name__ == "__main__":
     #    test_np = test[numeric_features].values
 
     
-    # convert data to DMatrix
+    # -------------------------
+    # DMATRIX CONVERSION WITH CATEGORICAL SUPPORT
+    # -------------------------
     dtrain = xgb.DMatrix(train, label=train_target, enable_categorical=True)
     dtest = xgb.DMatrix(test, label=test_target, enable_categorical=True)
 
@@ -101,13 +110,15 @@ if __name__ == "__main__":
     del test 
     gc.collect()
 
-    
-    # UPDATE THE HYPER PARAMS
+
+    # -------------------------
+    # TRAINING AND EVALUATION
+    # -------------------------
+    # update hyper parameters
     hyper_params['tree_method'] = 'hist'
     if hyper_params['objective'] == "reg:squarederror":
         hyper_params['eval_metric'] = 'rmse'
 
-    # TRAINING
     # To store evaluation results at each iteration
     eval_results = {}
     bst = xgb.train(
@@ -119,14 +130,18 @@ if __name__ == "__main__":
         evals_result=eval_results
     )
 
+    # -------------------------
     # STORE THE MODEL
+    # -------------------------
     os.makedirs(model_out_dir, exist_ok=True)
     model_path = os.path.join(model_out_dir, )
     bst.save_model(f"{model_out_dir}/xgboost-model")
     #with open(model_location, "wb") as f:
     #    pickle.dump(model, f)
 
+    # -------------------------
     # STORE THE TRAIN & TEST ACCURACY
+    # -------------------------
     best_iteration = bst.best_iteration if bst.best_iteration is not None else len(eval_results["train"]["rmse"]) - 1
 
     train_rmse = eval_results["train"]["rmse"][best_iteration]
